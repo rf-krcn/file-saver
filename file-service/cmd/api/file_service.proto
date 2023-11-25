@@ -1,0 +1,25 @@
+syntax = "proto3";
+option go_package = "cmd/api";
+
+// FileService represents the service for file operations.
+service FileService {
+  // UploadFile is used to upload a file.
+  rpc UploadFile(FileRequest) returns (FileResponse);
+  // GetFile is used to retrieve a file.
+  rpc GetFile(FileRequest) returns (FileResponse);
+}
+
+// FileRequest represents the request message for file operations.
+message FileRequest {
+  string user_id = 1;
+  string file_name = 2;
+  string file_type = 3;
+  bytes file_content = 4;
+}
+
+// FileResponse represents the response message for file operations.
+message FileResponse {
+  bytes file_content = 1;
+  string file_name = 2;
+  string file_type = 3;  // Consider using an enum for specific file types.
+}
