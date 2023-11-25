@@ -37,13 +37,11 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	/*
-		err = logRequest("adding user", fmt.Sprintf("User %s added.", user.UserName))
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-	*/
+	err = logRequest("Adding user", fmt.Sprintf("User %s added.", user.UserName))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
 	token, err := utils.GenerateToken(user.UserName)
 	if err != nil {
@@ -82,6 +80,12 @@ func Login(c *gin.Context) {
 	err = utils.ComparePassword(user.Password, loginRequest.Password)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
+	}
+
+	err = logRequest("User authentificated", fmt.Sprintf("User %s logged in.", user.UserName))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
