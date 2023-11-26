@@ -73,7 +73,7 @@ func MainHandler(c *gin.Context) {
 		UploadFile(c, requestPayload.File)
 	case "getFile":
 		GetFile(c, requestPayload.File)
-	case "getAllFilesNames":
+	case "getAllFiles":
 		GetAllFilesName(c)
 	}
 
@@ -182,10 +182,9 @@ func CheckToken(c *gin.Context) {
 }
 
 func UploadFile(c *gin.Context, entry FilePayload) {
-	// Extract the JWT token from the request header
+
 	tokenString := c.GetHeader("Authorization")
 
-	// Verify the JWT token
 	token, err := utils.ValidateToken(tokenString)
 	if err != nil || !token.Valid {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -198,7 +197,6 @@ func UploadFile(c *gin.Context, entry FilePayload) {
 		return
 	}
 
-	// Retrieve the file from the form data
 	files := form.File["file"]
 	if len(files) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No file provided"})
@@ -206,7 +204,6 @@ func UploadFile(c *gin.Context, entry FilePayload) {
 	}
 	file := files[0]
 
-	// Open the uploaded file
 	src, err := file.Open()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error opening uploaded file"})
@@ -214,7 +211,6 @@ func UploadFile(c *gin.Context, entry FilePayload) {
 	}
 	defer src.Close()
 
-	// Read the file contents into a byte slice
 	fileContents, err := io.ReadAll(src)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error reading file contents"})
@@ -223,7 +219,6 @@ func UploadFile(c *gin.Context, entry FilePayload) {
 
 	payload, err := utils.DecodeJWT(tokenString)
 	if err != nil {
-		// Handle error
 		fmt.Println("Error decoding JWT:", err)
 		return
 	}
@@ -238,14 +233,11 @@ func UploadFile(c *gin.Context, entry FilePayload) {
 
 	fileClient := NewFileServiceClient(conn)
 
-	// Token is valid, proceed with file saving
-
-	// Extract file data from the request (you may need to handle file uploads properly)
 	fileRequest := AddRequest{
-		UserId:      userID,         // replace with actual user ID from the token or your authentication system
-		FileName:    entry.FileName, // replace with the actual file name
-		FileType:    entry.FileType, // replace with the actual file type
-		FileContent: fileContents,   // replace with the actual file content
+		UserId:      userID,
+		FileName:    entry.FileName,
+		FileType:    entry.FileType,
+		FileContent: fileContents,
 	}
 
 	fileResponse, err := fileClient.UploadFile(context.Background(), &fileRequest)
@@ -255,7 +247,12 @@ func UploadFile(c *gin.Context, entry FilePayload) {
 
 	message := "File saved successfully " + fileResponse.FileName
 
-	// TODO: Implement your file saving logic here
+	err = logRequest("file uploading", fmt.Sprintf("%s uploaded a file: %s", userID, fileResponse.FileName))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": message})
 }
 
@@ -297,6 +294,12 @@ func GetFile(c *gin.Context, entry FilePayload) {
 		return
 	}
 
+	err = logRequest("file loaded", fmt.Sprintf("%s loaded a file: %s", userID, fileResponse.FileName))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, fileResponse)
 }
 
@@ -335,5 +338,37 @@ func GetAllFilesName(c *gin.Context) {
 		return
 	}
 
+	err = logRequest("file checking", fmt.Sprintf("%s checked his files", userID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, allFilesResponse.Files)
+}
+
+func logRequest(name, data string) error {
+	var entry struct {
+		Name string `json:"name"`
+		Data string `json:"data"`
+	}
+
+	entry.Name = name
+	entry.Data = data
+
+	jsonData, _ := json.Marshal(entry)
+	logServiceURL := "http://logger-service/log"
+
+	request, err := http.NewRequest("POST", logServiceURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+
+	client := &http.Client{}
+	_, err = client.Do(request)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
