@@ -4,22 +4,42 @@ option go_package = "cmd/api";
 // FileService represents the service for file operations.
 service FileService {
   // UploadFile is used to upload a file.
-  rpc UploadFile(FileRequest) returns (FileResponse);
+  rpc UploadFile(AddRequest) returns (AddResponse);
   // GetFile is used to retrieve a file.
-  rpc GetFile(FileRequest) returns (FileResponse);
+  rpc GetFile(GetRequest) returns (GetResponse);
+  // GetAllFiles is used to retrieve all file names for a user.
+  rpc GetAllFiles(GetRequest) returns (AllFilesResponse);
 }
 
-// FileRequest represents the request message for file operations.
-message FileRequest {
+// Represents the request message for uploading a file.
+message AddRequest {
   string user_id = 1;
   string file_name = 2;
   string file_type = 3;
   bytes file_content = 4;
 }
 
-// FileResponse represents the response message for file operations.
-message FileResponse {
+// Represents the response message for uploading a file.
+message AddResponse {
+  string file_name = 1;
+}
+
+// Represents the request message for retrieving a file.
+message GetRequest {
+  string user_id = 1;
+  string file_name = 2;
+}
+
+// Represents the response message for retrieving a file.
+message GetResponse {
   bytes file_content = 1;
   string file_name = 2;
-  string file_type = 3;  // Consider using an enum for specific file types.
+  string file_type = 3;
+  uint64 file_size_bytes = 4;
+  string creating_time = 5;
+}
+
+// Represents the response message for retrieving all files.
+message AllFilesResponse {
+  repeated GetResponse files = 1;
 }

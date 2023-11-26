@@ -18,7 +18,6 @@ func Routes() *gin.Engine {
 	config.MaxAge = 300
 	r.Use(cors.New(config))
 
-	r.POST("try", UploadFileHandler)
 	r.POST("submit", MainHandler)
 	return r
 }
