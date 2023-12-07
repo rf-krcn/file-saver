@@ -15,7 +15,7 @@ This project provides users with a secure platform to sign in, upload, and retri
 
   
 
-![Microservices Communication](./file_saver_no_bg.png)
+![Microservices Communication](./project//file_saver_no_bg.png)
 
   
 
