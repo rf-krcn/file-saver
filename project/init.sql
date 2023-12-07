@@ -1,2 +1,1 @@
-CREATE DATABASE files;
 CREATE DATABASE users;

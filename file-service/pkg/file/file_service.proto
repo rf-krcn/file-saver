@@ -4,9 +4,9 @@ option go_package = "pkg/file";
 // FileService represents the service for file operations.
 service FileService {
   // UploadFile is used to upload a file.
-  rpc UploadFile(AddRequest) returns (AddResponse);
+  rpc UploadFile(stream AddRequest) returns (AddResponse);
   // GetFile is used to retrieve a file.
-  rpc GetFile(GetRequest) returns (GetResponse);
+  rpc GetFile(GetRequest) returns (stream GetContent);
   // GetAllFiles is used to retrieve all file names for a user.
   rpc GetAllFiles(GetRequest) returns (AllFilesResponse);
 }
@@ -16,12 +16,17 @@ message AddRequest {
   string user_id = 1;
   string file_name = 2;
   string file_type = 3;
-  bytes file_content = 4;
+  int64 file_size = 4;
+  bytes file_content = 5;
 }
 
 // Represents the response message for uploading a file.
 message AddResponse {
   string file_name = 1;
+}
+
+message GetContent {
+  bytes file_content = 1;
 }
 
 // Represents the request message for retrieving a file.
@@ -32,11 +37,10 @@ message GetRequest {
 
 // Represents the response message for retrieving a file.
 message GetResponse {
-  bytes file_content = 1;
-  string file_name = 2;
-  string file_type = 3;
-  uint64 file_size_bytes = 4;
-  string creating_time = 5;
+  string file_name = 1;
+  string file_type = 2;
+  uint64 file_size_bytes = 3;
+  string creating_time = 4;
 }
 
 // Represents the response message for retrieving all files.

@@ -26,6 +26,18 @@ services:
       replicas: 1
 
 
+  client-service:
+    build:
+      context: ./../client-service
+      dockerfile: ./../client-service/client-service.dockerfile
+    restart: always
+    ports:
+      - "3000:80"
+    deploy:
+      mode: replicated
+      replicas: 1      
+
+
   file-service:
     build:
       context: ./../file-service
@@ -36,7 +48,8 @@ services:
       replicas: 1
     environment:
       DSN: "host=postgres port=5432 user=postgres password=password dbname=files sslmode=disable timezone=UTC connect_timeout=5"
-
+    volumes:
+      - ./db-data/files/:/files/
 
   logger-service:
     build:
@@ -50,8 +63,6 @@ services:
 
   postgres:
     image: 'postgres:14.0'
-    ports:
-      - "5432:5432"
     restart: always
     deploy:
       mode: replicated
@@ -59,16 +70,13 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: poqtgress
+      POSTGRES_DB: files
     volumes:
       - ./db-data/postgres/:/var/lib/postgresql/data/    
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
 
-
   mongo:
     image: 'mongo:4.2.16-bionic'
-    ports:
-      - "27017:27017"
     environment:
       MONGO_INITDB_DATABASE: logs
       MONGO_INITDB_ROOT_USERNAME: admin

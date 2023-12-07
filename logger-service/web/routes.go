@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Routes defines the API routes and returns a Gin engine.
 func Routes() *gin.Engine {
 
 	// Create a new Gin router
@@ -13,14 +14,15 @@ func Routes() *gin.Engine {
 
 	// Enable CORS
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"*"} // You can change this to your specific origins
-	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowOrigins = []string{"*"}
+	config.AllowMethods = []string{"POST"}
 	config.AllowHeaders = []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"}
 	config.ExposeHeaders = []string{"Link"}
 	config.AllowCredentials = true
 	config.MaxAge = 300
 	r.Use(cors.New(config))
 
+	// Define the "/log" route
 	r.POST("/log", helpers.WriteLog)
 	return r
 }

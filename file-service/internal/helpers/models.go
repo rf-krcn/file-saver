@@ -16,16 +16,15 @@ func New(dbPool *gorm.DB) {
 
 type File struct {
 	gorm.Model
-	UserID      string `gorm:"not null"`
-	FileName    string `gorm:"not null"`
-	FileContent []byte `gorm:"not null"`
-	Size        int64  `gorm:"not null"`
-	FileType    string `gorm:"not null"`
+	UserID   string `gorm:"not null"`
+	FileName string `gorm:"not null"`
+	Size     int64  `gorm:"not null"`
+	FileType string `gorm:"not null"`
 }
 
 func SaveFileDB(file *File) (*File, error) {
 	// Check if a file with the same name already exists for the user
-	existingFile, err := GetFile(file.UserID, file.FileName)
+	existingFile, err := GetFileDB(file.UserID, file.FileName)
 	if err != nil && err != gorm.ErrRecordNotFound {
 		// Return an error if there is an issue other than the record not found
 		return nil, err

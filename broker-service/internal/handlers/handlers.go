@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
+	"time"
 
 	"github.com/AbderraoufKhorchani/file-saver/broker-service/pkg/file"
 	"github.com/gin-gonic/gin"
@@ -47,6 +47,13 @@ type UserPayload struct {
 type FilePayload struct {
 	FileName string `json:"file_name"`
 	FileType string `json:"file_type"`
+	FileSize int    `json:"file_size"`
+}
+type jsonResponse struct {
+	Error   bool        `json:"error"`
+	Message string      `json:"message,omitempty"`
+	Token   interface{} `json:"token,omitempty"`
+	User    interface{} `json:"user,omitempty"`
 }
 
 func MainHandler(c *gin.Context) {
@@ -85,13 +92,13 @@ func login(c *gin.Context, entry LoginPayload) {
 
 	jsonData, err := json.Marshal(entry)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error parsing JSON: %s", err)})
 		return
 	}
 
 	request, err := http.NewRequest("POST", authServiceURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Internal server error: %s", err)})
 		return
 	}
 
@@ -101,13 +108,13 @@ func login(c *gin.Context, entry LoginPayload) {
 
 	response, err := client.Do(request)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Internal server error: %s", err)})
 		return
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusAccepted && response.StatusCode != http.StatusOK {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": response.StatusCode})
+		c.JSON(response.StatusCode, gin.H{"error": response.Body})
 		return
 	}
 
@@ -123,14 +130,14 @@ func login(c *gin.Context, entry LoginPayload) {
 		return
 	}
 
-	c.JSON(http.StatusOK, jsonFromService.Data)
+	c.JSON(http.StatusOK, jsonFromService)
 }
 
 func signup(c *gin.Context, entry UserPayload) {
 
 	jsonData, err := json.Marshal(entry)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	authServiceURL := "http://auth-service/signup"
@@ -149,15 +156,15 @@ func signup(c *gin.Context, entry UserPayload) {
 	}
 	defer response.Body.Close()
 
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusAccepted {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": response.Status})
-		return
-	}
-
 	var jsonFromService jsonResponse
 	err = json.NewDecoder(response.Body).Decode(&jsonFromService)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusAccepted {
+		c.JSON(http.StatusBadRequest, jsonFromService.Message)
 		return
 	}
 
@@ -166,11 +173,13 @@ func signup(c *gin.Context, entry UserPayload) {
 		return
 	}
 
-	c.JSON(http.StatusOK, jsonFromService.Data)
+	c.JSON(http.StatusOK, jsonFromService)
 }
 
 func CheckToken(c *gin.Context) {
 	tokenString := c.GetHeader("Authorization")
+
+	fmt.Println(tokenString)
 
 	token, err := ValidateToken(tokenString)
 	if err != nil || !token.Valid {
@@ -182,82 +191,92 @@ func CheckToken(c *gin.Context) {
 }
 
 func UploadFile(c *gin.Context, entry FilePayload) {
-
 	tokenString := c.GetHeader("Authorization")
-
 	token, err := ValidateToken(tokenString)
 	if err != nil || !token.Valid {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	form, err := c.MultipartForm()
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Unable to parse form"})
-		return
-	}
-
-	files := form.File["file"]
-	if len(files) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No file provided"})
-		return
-	}
-	tempFile := files[0]
-
-	src, err := tempFile.Open()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error opening uploaded file"})
-		return
-	}
-	defer src.Close()
-
-	fileContents, err := io.ReadAll(src)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error reading file contents"})
-		return
-	}
-
 	payload, err := DecodeJWT(tokenString)
 	if err != nil {
-		fmt.Println("Error decoding JWT:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decoding JWT"})
 		return
 	}
 
 	userID := payload["sub"].(string)
 
-	conn, err := grpc.Dial("file-service:50051", grpc.WithInsecure())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.DialContext(ctx, "file-service:50051", grpc.WithInsecure())
 	if err != nil {
-		log.Fatalf("Failed to connect to File Saving service: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to connect to File Saving service"})
+		return
 	}
 	defer conn.Close()
 
 	fileClient := file.NewFileServiceClient(conn)
-
-	fileRequest := file.AddRequest{
-		UserId:      userID,
-		FileName:    entry.FileName,
-		FileType:    entry.FileType,
-		FileContent: fileContents,
-	}
-
-	fileResponse, err := fileClient.UploadFile(context.Background(), &fileRequest)
+	stream, err := fileClient.UploadFile(ctx)
 	if err != nil {
-		log.Fatalf("Failed to upload file: %v", err)
-	}
-
-	message := "File saved successfully " + fileResponse.FileName
-
-	err = logRequest("file uploading", fmt.Sprintf("%s uploaded a file: %s", userID, fileResponse.FileName))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error opening gRPC stream"})
 		return
 	}
+	defer stream.CloseSend()
+
+	fileRequest := &file.AddRequest{
+		UserId:   userID,
+		FileName: entry.FileName,
+		FileType: entry.FileType,
+		FileSize: int64(entry.FileSize),
+	}
+
+	if err := stream.Send(fileRequest); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error sending metadata to gRPC stream"})
+		return
+	}
+
+	fileTemp, _, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error getting file from request"})
+		return
+	}
+	defer fileTemp.Close()
+
+	bufferSize := 4096
+	buffer := make([]byte, bufferSize)
+
+	for {
+		n, err := fileTemp.Read(buffer)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error reading file"})
+			return
+		}
+
+		chunk := &file.AddRequest{
+			FileContent: buffer[:n],
+		}
+		if err := stream.Send(chunk); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error sending file content to gRPC stream"})
+			return
+		}
+	}
+
+	_, err = stream.CloseAndRecv()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error receiving response from gRPC stream"})
+		return
+	}
+
+	message := "File saved successfully"
 
 	c.JSON(http.StatusOK, gin.H{"message": message})
 }
 
 func GetFile(c *gin.Context, entry FilePayload) {
-
 	tokenString := c.GetHeader("Authorization")
 
 	token, err := ValidateToken(tokenString)
@@ -283,24 +302,47 @@ func GetFile(c *gin.Context, entry FilePayload) {
 
 	fileClient := file.NewFileServiceClient(conn)
 
-	fileRequest := file.GetRequest{
+	fileRequest := &file.GetRequest{
 		UserId:   userID,
 		FileName: entry.FileName,
 	}
 
-	fileResponse, err := fileClient.GetFile(context.Background(), &fileRequest)
+	// Open a gRPC stream to receive file information and content
+	stream, err := fileClient.GetFile(context.Background(), fileRequest)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"Failed to get file": err})
 		return
 	}
+	defer stream.CloseSend()
 
-	err = logRequest("file loaded", fmt.Sprintf("%s loaded a file: %s", userID, fileResponse.FileName))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+	// Create a buffer to accumulate file content chunks
+	c.Header("Content-Type", "application/octet-stream")
+
+	// Set other headers as needed
+	c.Header("Content-Disposition", "attachment; filename="+entry.FileName)
+
+	// Create a buffer to accumulate file content chunks
+	//var fileContent []byte
+
+	for {
+		contentChunk, err := stream.Recv()
+		if err == io.EOF {
+			// End of file streaming
+			break
+		}
+		if err != nil {
+			// Handle error
+			return
+		}
+
+		// Append the content chunk to the buffer
+		//fileContent = append(fileContent, contentChunk.FileContent...)
+
+		// Stream the content chunk to the client
+		c.Writer.Write(contentChunk.FileContent)
+		c.Writer.Flush()
 	}
 
-	c.JSON(http.StatusOK, fileResponse)
 }
 
 func GetAllFilesName(c *gin.Context) {
@@ -372,3 +414,5 @@ func logRequest(name, data string) error {
 
 	return nil
 }
+
+//promonom

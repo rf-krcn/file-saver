@@ -2,6 +2,7 @@ BROKER_BINARY=brokerApp
 AUTH_BINARY=authApp
 FILE_BINARY=fileApp
 LOGGER_BINARY=loggerApp
+CLIENT_BINARY=clientApp
 
 
 ## up: starts all containers in the background without forcing build
@@ -11,7 +12,7 @@ up:
 	@echo "Docker images started!"
 
 ## up_build: stops docker-compose (if running), builds all projects and starts docker compose
-up_build: build_broker build_file build_auth build_logger
+up_build: build_broker build_file build_auth build_logger build_client
 	@echo "Stopping docker images (if running...)"
 	docker-compose down
 	@echo "Building (when required) and starting docker images..."
@@ -50,10 +51,18 @@ build_logger:
 	cd ../logger-service && env GOOS=linux CGO_ENABLED=0 go build -o ${LOGGER_BINARY} ./cmd/logger-service
 	@echo "Done!"	
 
+## build_logger: builds the frontend binary as a linux executable
+build_client:
+	@echo "Building client binary..."
+	cd ../client-service && env GOOS=linux CGO_ENABLED=0 go build -o ${CLIENT_BINARY} ./cmd/client-service
+	@echo "Done!"		
+
 install:
 	@echo "Installing broker dependencies..."
 	cd ../broker-service && go install ./...
 	@echo "Installing auth dependencies..."
-	cd ../authentication-service && go install ./...
+	cd ../auth-service && go install ./...
 	@echo "Installing logger dependencies..."
 	cd ../logger-service && go install ./...
+	@echo "Installing file dependencies..."
+	cd ../file-service && go install ./...

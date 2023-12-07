@@ -33,15 +33,17 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	// close connection
+	// Close connection when the main function exits
 	defer func() {
 		if err = client.Disconnect(ctx); err != nil {
 			panic(err)
 		}
 	}()
 
+	// Add the database to the model
 	helpers.New(client)
 
+	// Configure and start the HTTP server
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", webPort),
 		Handler: web.Routes(),
@@ -61,7 +63,7 @@ func connectToMongo() (*mongo.Client, error) {
 		Password: "password",
 	})
 
-	// connect
+	// Connect to MongoDB
 	c, err := mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
 		log.Println("Error connecting:", err)

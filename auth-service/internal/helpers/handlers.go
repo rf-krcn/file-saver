@@ -47,11 +47,14 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	user.Password = ""
+
 	// Respond with the generated token
 	c.JSON(http.StatusAccepted, gin.H{
 		"error":   false,
 		"message": "Signed up!",
-		"data":    token,
+		"token":   token,
+		"user":    user,
 	})
 
 }
@@ -94,11 +97,14 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	user.Password = ""
+
 	// Respond with the generated token
-	c.JSON(http.StatusAccepted, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"error":   false,
 		"message": "Authenticated!",
-		"data":    token,
+		"token":   token,
+		"user":    user,
 	})
 }
 

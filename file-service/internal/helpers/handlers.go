@@ -2,9 +2,13 @@ package helpers
 
 import (
 	"context"
+	"io"
 	"log"
+	"os"
+	"path/filepath"
 
 	fl "github.com/AbderraoufKhorchani/file-saver/file-service/pkg/file"
+	"gorm.io/gorm"
 )
 
 type FileService struct {
@@ -47,25 +51,87 @@ func GetAllFiles(userID string) (*fl.AllFilesResponse, error) {
 	return allFilesResponse, nil
 }
 
-func (s *FileService) UploadFile(ctx context.Context, req *fl.AddRequest) (*fl.AddResponse, error) {
+func (s *FileService) UploadFile(stream fl.FileService_UploadFileServer) error {
+	var metadata *fl.AddRequest
 
-	file := &File{
-		UserID:      req.GetUserId(),
-		FileName:    req.GetFileName(),
-		FileContent: req.GetFileContent(),
-		Size:        int64(len(req.GetFileContent())),
-		FileType:    req.GetFileType(),
+	if metadataChunk, err := stream.Recv(); err == nil {
+		metadata = metadataChunk
+	} else {
+		return err
 	}
 
-	f, err := SaveFile(file)
+	userID := metadata.GetUserId()
+	fileName := metadata.GetFileName()
+	fileType := metadata.GetFileType()
+	fileSize := metadata.GetFileSize()
+
+	existingFile, err := GetFileDB(userID, fileName)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return err
+	}
+
+	if existingFile != nil {
+		fileName = findUniqueFilename(fileName, userID)
+	}
+
+	fileStruct := &File{
+		UserID:   userID,
+		FileName: fileName,
+		FileType: fileType,
+		Size:     fileSize,
+	}
+
+	// Specify the directory where you want to store the files
+	storageDirectory := "/files"
+
+	// Construct the directory path based on user ID
+	userDirectory := filepath.Join(storageDirectory, userID)
+
+	// Ensure the user-specific directory exists
+	if err := os.MkdirAll(userDirectory, os.ModePerm); err != nil {
+		log.Printf("Error creating user directory: %v", err)
+		return err
+	}
+
+	// Construct the full path to the file inside the user's directory
+	fullFilePath := filepath.Join(userDirectory, fileName)
+
+	// Create or open the file for writing
+	file, err := os.Create(fullFilePath)
+	if err != nil {
+		log.Printf("Error creating file: %v", err)
+		return err
+	}
+	defer file.Close()
+	for {
+		chunk, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("Error receiving chunk: %v", err)
+			return err
+		}
+
+		// Write the content chunk to the file
+		_, err = file.Write(chunk.FileContent)
+		if err != nil {
+			log.Printf("Error writing to file: %v", err)
+			return err
+		}
+	}
+
+	_, err = SaveFile(fileStruct)
 	if err != nil {
 		log.Printf("Error uploading file: %v", err)
-		return nil, err
+		return err
 	}
 
-	return &fl.AddResponse{
-		FileName: f.FileName,
-	}, nil
+	response := &fl.AddResponse{
+		FileName: fileName,
+	}
+
+	return stream.SendAndClose(response)
 }
 
 func SaveFile(file *File) (*File, error) {
@@ -79,16 +145,37 @@ func SaveFile(file *File) (*File, error) {
 	return f, nil
 }
 
-func (s *FileService) GetFile(ctx context.Context, req *fl.GetRequest) (*fl.GetResponse, error) {
+func (s *FileService) GetFile(req *fl.GetRequest, stream fl.FileService_GetFileServer) error {
 
-	file, err := GetFile(req.GetUserId(), req.GetFileName())
+	filePath := filepath.Join("/files", req.GetUserId(), req.GetFileName())
+	fileReader, err := os.Open(filePath)
 	if err != nil {
-		log.Printf("Error retrieving file: %v", err)
-		return nil, err
+		log.Printf("Error opening file: %v", err)
+		return err
+	}
+	defer fileReader.Close()
+
+	// Stream the file content to the client
+	const chunkSize = 4096
+	buffer := make([]byte, chunkSize)
+	for {
+		bytesRead, err := fileReader.Read(buffer)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("Error reading file: %v", err)
+			return err
+		}
+
+		// Send the chunk to the client
+		if err := stream.Send(&fl.GetContent{FileContent: buffer[:bytesRead]}); err != nil {
+			log.Printf("Error sending file content: %v", err)
+			return err
+		}
 	}
 
-	return file, err
-
+	return nil
 }
 
 func GetFile(id, name string) (*fl.GetResponse, error) {
@@ -100,7 +187,6 @@ func GetFile(id, name string) (*fl.GetResponse, error) {
 	}
 
 	return &fl.GetResponse{
-		FileContent:   file.FileContent,
 		FileName:      file.FileName,
 		FileType:      file.FileType,
 		FileSizeBytes: uint64(file.Size),

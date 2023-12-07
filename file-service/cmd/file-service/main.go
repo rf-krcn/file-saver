@@ -32,7 +32,10 @@ func main() {
 	}
 
 	fileService := &helpers.FileService{} // Use a pointer to the service instance
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(
+		grpc.MaxRecvMsgSize(1024*1024*1024), // 1 GB for receiving messages
+		grpc.MaxSendMsgSize(1024*1024*1024),
+	)
 
 	// Register your service with the gRPC server
 	file.RegisterFileServiceServer(srv, fileService)
