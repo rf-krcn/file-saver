@@ -130,6 +130,12 @@ func login(c *gin.Context, entry LoginPayload) {
 		return
 	}
 
+	err = logRequest("login in", fmt.Sprintf("%s logged in", entry.UserName))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, jsonFromService)
 }
 
@@ -170,6 +176,12 @@ func signup(c *gin.Context, entry UserPayload) {
 
 	if jsonFromService.Error {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Signing in failed"})
+		return
+	}
+
+	err = logRequest("sign up", fmt.Sprintf("%s signed up", entry.UserName))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -271,6 +283,12 @@ func UploadFile(c *gin.Context, entry FilePayload) {
 		return
 	}
 
+	err = logRequest("file uploading", fmt.Sprintf("%s loaded a file: %s", userID, entry.FileName))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	message := "File saved successfully"
 
 	c.JSON(http.StatusOK, gin.H{"message": message})
@@ -322,8 +340,6 @@ func GetFile(c *gin.Context, entry FilePayload) {
 	c.Header("Content-Disposition", "attachment; filename="+entry.FileName)
 
 	// Create a buffer to accumulate file content chunks
-	//var fileContent []byte
-
 	for {
 		contentChunk, err := stream.Recv()
 		if err == io.EOF {
@@ -331,18 +347,20 @@ func GetFile(c *gin.Context, entry FilePayload) {
 			break
 		}
 		if err != nil {
-			// Handle error
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error while loading the file"})
 			return
 		}
-
-		// Append the content chunk to the buffer
-		//fileContent = append(fileContent, contentChunk.FileContent...)
 
 		// Stream the content chunk to the client
 		c.Writer.Write(contentChunk.FileContent)
 		c.Writer.Flush()
 	}
 
+	err = logRequest("getting a file", fmt.Sprintf("%s loaded a file: %s", userID, entry.FileName))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 }
 
 func GetAllFilesName(c *gin.Context) {
@@ -380,7 +398,7 @@ func GetAllFilesName(c *gin.Context) {
 		return
 	}
 
-	err = logRequest("file checking", fmt.Sprintf("%s checked his files", userID))
+	err = logRequest("files loading", fmt.Sprintf("%s checked his files", userID))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

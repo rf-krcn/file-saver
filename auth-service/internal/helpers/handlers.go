@@ -1,9 +1,6 @@
 package helpers
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -32,12 +29,6 @@ func Register(c *gin.Context) {
 	err := Insert(user)
 	if err != nil {
 		errorJSON(c, err)
-		return
-	}
-
-	err = logRequest("Adding user", fmt.Sprintf("User %s added.", user.UserName))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -81,12 +72,6 @@ func Login(c *gin.Context) {
 	err = ComparePassword(user.Password, loginRequest.Password)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-		return
-	}
-
-	err = logRequest("User authentificated", fmt.Sprintf("User %s logged in.", user.UserName))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -138,40 +123,8 @@ func (app *Config) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	err = logRequest("password resetting", fmt.Sprintf("%s password reset ", user.UserName))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
 	resonse := user.UserName + "'s Password resetted."
 
 	c.JSON(http.StatusOK, resonse)
 
-}
-
-func logRequest(name, data string) error {
-	var entry struct {
-		Name string `json:"name"`
-		Data string `json:"data"`
-	}
-
-	entry.Name = name
-	entry.Data = data
-
-	jsonData, _ := json.Marshal(entry)
-	logServiceURL := "http://logger-service/log"
-
-	request, err := http.NewRequest("POST", logServiceURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return err
-	}
-
-	client := &http.Client{}
-	_, err = client.Do(request)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
