@@ -40,7 +40,7 @@ You need Go version 1.19 or later. Check your Go version using the following com
   
 
 ```bash
-go version`
+go version
 ```
   
 
