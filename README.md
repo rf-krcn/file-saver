@@ -92,7 +92,7 @@ To install the project, follow these steps:
   
 
 ```bash
-git clone https://github.com/AbderraoufKhorchani/file-saver.git
+git clone https://github.com/rf-krcn/file-saver.git
 
 cd file-saver
 
